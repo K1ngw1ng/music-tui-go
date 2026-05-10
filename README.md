@@ -1,7 +1,25 @@
 # music-tui-go
 A TUI music player written in Go
 
-# Instructions
+## Prebuilt Binary
+
+### Debian (and debian-like systems)    
+
+```bash
+# Dependencies (if not already installed)
+sudo apt install golang ffmpeg pulseaudio-utils
+
+# Run (first time, pass your music directory, it gets saved)
+./musicplayer ~/Music
+
+# Subsequent runs
+./musicplayer
+```
+
+
+## Build Instructions
+
+### Debian (and debian-like systems)    
 
 ```bash
 # Dependencies (if not already installed)
@@ -11,14 +29,14 @@ sudo apt install golang ffmpeg pulseaudio-utils
 cd musicplayer
 go build -o musicplayer .
 
-# Run (first time, pass your music directory — it gets saved)
+# Run (first time, pass your music directory, it gets saved)
 ./musicplayer ~/Music
 
 # Subsequent runs
 ./musicplayer
 ```
 
-**Controls:**
+## Controls:
 | Key | Action |
 |---|---|
 | `↑↓` / `jk` | Navigate |
