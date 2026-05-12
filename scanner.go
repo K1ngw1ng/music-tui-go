@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -47,6 +48,112 @@ func scanDir(dir string) ([]Track, error) {
 		return nil
 	})
 	return tracks, err
+}
+
+func scanPaths(paths []string) ([]Track, error) {
+	var tracks []Track
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			ts, err := scanDir(p)
+			if err != nil {
+				return nil, err
+			}
+			tracks = append(tracks, ts...)
+		} else if audioExts[strings.ToLower(filepath.Ext(p))] {
+			tracks = append(tracks, probeTrack(p))
+		}
+	}
+	return tracks, nil
+}
+
+func filterByAlbum(tracks []Track, album string) []Track {
+	album = strings.ToLower(album)
+	var out []Track
+	for _, t := range tracks {
+		if strings.ToLower(t.Album) == album {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func filterByArtist(tracks []Track, artist string) []Track {
+	artist = strings.ToLower(artist)
+	var out []Track
+	for _, t := range tracks {
+		if strings.ToLower(t.Artist) == artist {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func readM3U(m3uPath string) ([]string, error) {
+	f, err := os.Open(m3uPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	dir := filepath.Dir(m3uPath)
+	var paths []string
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if !filepath.IsAbs(line) {
+			line = filepath.Join(dir, line)
+		}
+		paths = append(paths, line)
+	}
+	return paths, sc.Err()
+}
+
+func appendM3U(m3uPath string, tracks []Track) error {
+	existing := map[string]bool{}
+	if paths, err := readM3U(m3uPath); err == nil {
+		for _, p := range paths {
+			existing[p] = true
+		}
+	}
+
+	f, err := os.OpenFile(m3uPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	info, _ := f.Stat()
+	if info.Size() == 0 {
+		f.WriteString("#EXTM3U\n")
+	}
+
+	for _, t := range tracks {
+		if !existing[t.Path] {
+			f.WriteString(t.Path + "\n")
+		}
+	}
+	return nil
+}
+
+func tracksFromM3U(m3uPath string) ([]Track, error) {
+	paths, err := readM3U(m3uPath)
+	if err != nil {
+		return nil, err
+	}
+	var tracks []Track
+	for _, p := range paths {
+		if audioExts[strings.ToLower(filepath.Ext(p))] {
+			tracks = append(tracks, probeTrack(p))
+		}
+	}
+	return tracks, nil
 }
 
 type ffprobeOutput struct {

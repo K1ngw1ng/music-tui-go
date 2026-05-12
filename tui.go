@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -16,10 +17,9 @@ func (i trackItem) Title() string       { return i.t.DisplayTitle() }
 func (i trackItem) Description() string { return i.t.DisplayArtist() }
 func (i trackItem) FilterValue() string { return i.t.DisplayTitle() + " " + i.t.DisplayArtist() }
 
-
 type trackDoneMsg struct{ idx int }
 type artReadyMsg struct{ art string }
-
+type playlistSavedMsg struct{ err error }
 
 var (
 	artPanelStyle = lipgloss.NewStyle().
@@ -36,6 +36,14 @@ var (
 
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241"))
+
+	promptStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("205")).
+			Bold(true)
+
+	errStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
 )
 
 type model struct {
@@ -47,16 +55,24 @@ type model struct {
 	width   int
 	height  int
 	loading bool
+	title   string
+	cfg     Config
+
+	prompting    bool
+	promptInput  textinput.Model
+	promptTrack  int
+	promptErr    string
+	promptOk     string
 }
 
-func newModel(tracks []Track) model {
+func newModel(tracks []Track, cfg Config, title string) model {
 	items := make([]list.Item, len(tracks))
 	for i, t := range tracks {
 		items[i] = trackItem{t}
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	l.Title = "Playlist"
+	l.Title = title
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	l.Styles.Title = lipgloss.NewStyle().
@@ -64,11 +80,18 @@ func newModel(tracks []Track) model {
 		Bold(true).
 		Padding(0, 1)
 
+	ti := textinput.New()
+	ti.Placeholder = "playlist name"
+	ti.CharLimit = 64
+
 	return model{
-		tracks:  tracks,
-		list:    l,
-		player:  &Player{},
-		current: -1,
+		tracks:      tracks,
+		list:        l,
+		player:      &Player{},
+		current:     -1,
+		title:       title,
+		cfg:         cfg,
+		promptInput: ti,
 	}
 }
 
@@ -89,14 +112,11 @@ func loadArt(path string, w, h int) tea.Cmd {
 	}
 }
 
-func waitDone(p *Player, onDone func()) tea.Cmd {
-	return func() tea.Msg {
-		<-make(chan struct{}) 
-		return nil
-	}
-}
-
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.prompting {
+		return m.updatePrompt(msg)
+	}
+
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
@@ -137,6 +157,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.current = -1
 			m.art = ""
 			return m, nil
+		case "a":
+			return m.startPrompt(m.list.Index()), nil
 		}
 
 	case trackDoneMsg:
@@ -149,6 +171,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.art = msg.art
 		m.loading = false
 		return m, nil
+
+	case playlistSavedMsg:
+		if msg.err != nil {
+			m.promptErr = msg.err.Error()
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -160,6 +188,54 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, loadArt(m.tracks[newIdx].Path, artW, artH))
 	}
 	return m, cmd
+}
+
+func (m model) startPrompt(trackIdx int) model {
+	m.prompting = true
+	m.promptTrack = trackIdx
+	m.promptErr = ""
+	m.promptOk = ""
+	m.promptInput.SetValue("")
+	m.promptInput.Focus()
+	return m
+}
+
+func (m model) updatePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc", "ctrl+c":
+			m.prompting = false
+			m.promptInput.Blur()
+			return m, nil
+		case "enter":
+			name := strings.TrimSpace(m.promptInput.Value())
+			if name == "" {
+				m.promptErr = "playlist name cannot be empty"
+				return m, nil
+			}
+			m3uPath, err := resolvePlaylist(m.cfg, name)
+			if err != nil {
+				m.promptErr = fmt.Sprintf("unknown playlist %q — create it with --create-playlist first", name)
+				return m, nil
+			}
+			track := m.tracks[m.promptTrack]
+			m.prompting = false
+			m.promptInput.Blur()
+			m.promptOk = fmt.Sprintf("Added %q to %q", track.DisplayTitle(), name)
+			return m, saveToPlaylist(m3uPath, track)
+		}
+	}
+	var cmd tea.Cmd
+	m.promptInput, cmd = m.promptInput.Update(msg)
+	return m, cmd
+}
+
+func saveToPlaylist(m3uPath string, track Track) tea.Cmd {
+	return func() tea.Msg {
+		err := appendM3U(m3uPath, []Track{track})
+		return playlistSavedMsg{err: err}
+	}
 }
 
 func (m *model) playTrack(idx int) tea.Cmd {
@@ -266,9 +342,24 @@ func (m model) View() string {
 
 	status := m.statusLine()
 
-	help := helpStyle.Render("enter/space: play/pause  n/→: next  p/←: prev  s: stop  /: filter  q: quit")
+	var bottom string
+	if m.prompting {
+		bottom = promptStyle.Render("Add to playlist: ") + m.promptInput.View()
+		if m.promptErr != "" {
+			bottom += "  " + errStyle.Render(m.promptErr)
+		}
+		bottom += "\n" + helpStyle.Render("enter: confirm  esc: cancel")
+	} else {
+		msg := ""
+		if m.promptOk != "" {
+			msg = "  " + helpStyle.Render("✓ "+m.promptOk)
+		} else if m.promptErr != "" {
+			msg = "  " + errStyle.Render(m.promptErr)
+		}
+		bottom = helpStyle.Render("enter/space: play/pause  n/→: next  p/←: prev  s: stop  a: add to playlist  /: filter  q: quit") + msg
+	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, top, status, help)
+	return lipgloss.JoinVertical(lipgloss.Left, top, status, bottom)
 }
 
 func (m model) statusLine() string {
