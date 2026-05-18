@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
 
 type Config struct {
-	MusicDir string `json:"music_dir"`
+	MusicDir  string            `json:"music_dir"`
+	Playlists map[string]string `json:"playlists,omitempty"`
 }
 
 func configPath() string {
@@ -22,6 +24,9 @@ func loadConfig() Config {
 	}
 	var c Config
 	json.Unmarshal(data, &c)
+	if c.Playlists == nil {
+		c.Playlists = map[string]string{}
+	}
 	return c
 }
 
@@ -35,4 +40,17 @@ func saveConfig(c Config) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+func resolvePlaylist(cfg Config, name string) (string, error) {
+	path, ok := cfg.Playlists[name]
+	if !ok {
+		return "", fmt.Errorf("unknown playlist %q (use --create-playlist to create it)", name)
+	}
+	return path, nil
+}
+
+func registerPlaylist(cfg *Config, name, path string) error {
+	cfg.Playlists[name] = path
+	return saveConfig(*cfg)
 }
