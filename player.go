@@ -31,7 +31,7 @@ type Player struct {
 	stopped bool
 }
 
-func (p *Player) Play(path string, onDone func()) {
+func (p *Player) Play(track Track, client *LastFMClient, onDone func()) {
 	p.mu.Lock()
 	p.stop()
 	p.stopped = false
@@ -43,6 +43,7 @@ func (p *Player) Play(path string, onDone func()) {
 		return
 	}
 
+	path := track.Path
 	rate, channels := probeAudio(path)
 
 	ffmpegCmd := exec.Command("ffmpeg",
@@ -107,12 +108,16 @@ func (p *Player) Play(path string, onDone func()) {
 	p.sink = sinkCmd
 	p.mu.Unlock()
 
+	cancelScrobble := startScrobbleTimer(track, client)
+
 	go func() {
 		ffmpegCmd.Wait()
 		if s := ffmpegStderr.String(); s != "" {
 			fmt.Fprintf(os.Stderr, "ffmpeg: %s\n", s)
 		}
 		sinkCmd.Wait()
+
+		cancelScrobble()
 
 		p.mu.Lock()
 		natural := !p.stopped

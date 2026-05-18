@@ -57,6 +57,7 @@ type model struct {
 	loading bool
 	title   string
 	cfg     Config
+	lastfm  *LastFMClient
 
 	prompting    bool
 	promptInput  textinput.Model
@@ -65,7 +66,7 @@ type model struct {
 	promptOk     string
 }
 
-func newModel(tracks []Track, cfg Config, title string) model {
+func newModel(tracks []Track, cfg Config, title string, lastfm *LastFMClient) model {
 	items := make([]list.Item, len(tracks))
 	for i, t := range tracks {
 		items[i] = trackItem{t}
@@ -91,6 +92,7 @@ func newModel(tracks []Track, cfg Config, title string) model {
 		current:     -1,
 		title:       title,
 		cfg:         cfg,
+		lastfm:      lastfm,
 		promptInput: ti,
 	}
 }
@@ -249,7 +251,7 @@ func (m *model) playTrack(idx int) tea.Cmd {
 	track := m.tracks[idx]
 
 	doneCh := make(chan int, 1)
-	m.player.Play(track.Path, func() {
+	m.player.Play(track, m.lastfm, func() {
 		doneCh <- idx
 	})
 
