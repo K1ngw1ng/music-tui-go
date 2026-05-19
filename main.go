@@ -17,11 +17,20 @@ func main() {
 	createFlag := flag.String("create-playlist", "", "Create (or overwrite) a named playlist from paths")
 	addFlag := flag.String("add-to-playlist", "", "Add tracks to a named playlist from paths")
 	outputFlag := flag.String("output", "", "Output .m3u path for --create-playlist (default: MusicDir/<name>.m3u)")
+	lastfmAuthFlag := flag.Bool("lastfm-auth", false, "Set up Last.fm API credentials and authenticate")
 	flag.Parse()
 
 	cfg := loadConfig()
 	if cfg.Playlists == nil {
 		cfg.Playlists = map[string]string{}
+	}
+
+	if *lastfmAuthFlag {
+		if err := lastfmAuthFlow(); err != nil {
+			fmt.Fprintf(os.Stderr, "last.fm auth error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if *createFlag != "" {
@@ -103,7 +112,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Playlist %q is empty\n", *playlistFlag)
 			os.Exit(1)
 		}
-		runTUI(tracks, cfg, *playlistFlag)
+		runTUI(tracks, cfg, *playlistFlag, loadLastFMClient())
 		return
 	}
 
@@ -160,11 +169,11 @@ func main() {
 		}
 	}
 
-	runTUI(tracks, cfg, title)
+	runTUI(tracks, cfg, title, loadLastFMClient())
 }
 
-func runTUI(tracks []Track, cfg Config, title string) {
-	m := newModel(tracks, cfg, title)
+func runTUI(tracks []Track, cfg Config, title string, lastfm *LastFMClient) {
+	m := newModel(tracks, cfg, title, lastfm)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

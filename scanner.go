@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,10 +17,11 @@ var audioExts = map[string]bool{
 }
 
 type Track struct {
-	Path   string
-	Title  string
-	Artist string
-	Album  string
+	Path     string
+	Title    string
+	Artist   string
+	Album    string
+	Duration int
 }
 
 func (t Track) DisplayTitle() string {
@@ -158,7 +160,8 @@ func tracksFromM3U(m3uPath string) ([]Track, error) {
 
 type ffprobeOutput struct {
 	Format struct {
-		Tags map[string]string `json:"tags"`
+		Duration string            `json:"duration"`
+		Tags     map[string]string `json:"tags"`
 	} `json:"format"`
 }
 
@@ -181,6 +184,10 @@ func probeTrack(path string) Track {
 	t.Title = firstNonEmpty(tags["title"], tags["TITLE"])
 	t.Artist = firstNonEmpty(tags["artist"], tags["ARTIST"], tags["album_artist"], tags["ALBUM_ARTIST"])
 	t.Album = firstNonEmpty(tags["album"], tags["ALBUM"])
+	var dur float64
+	if n, _ := fmt.Sscanf(probe.Format.Duration, "%f", &dur); n == 1 {
+		t.Duration = int(dur)
+	}
 	return t
 }
 
