@@ -36,6 +36,51 @@ go build -o musicplayer .
 ./musicplayer
 ```
 
+## Last.fm Instructions
+
+
+### 1. Create a Last.fm API application
+
+1. Go to [https://www.last.fm/api/account/create](https://www.last.fm/api/account/create) and log in
+2. Fill in the form:
+   - **Application name**: anything (e.g. `musicplayer`)
+   - **Application description**: anything
+   - **Callback URL**: leave blank
+3. Submit, you'll be shown an API key and Shared secret. Keep this page open.
+
+### 2. Run the auth command
+
+```sh
+musicplayer --lastfm-auth
+```
+
+You'll be prompted for your API key and shared secret:
+
+```
+Last.fm API key: <paste API key>
+Last.fm API secret: <paste shared secret>
+```
+
+The program will then print a URL:
+
+```
+Open this URL in your browser and approve access:
+
+  https://www.last.fm/api/auth/?api_key=...&token=...
+
+Press Enter when done...
+```
+
+Open the URL, click Allow access, return to the terminal, and press Enter.
+
+On success:
+
+```
+Last.fm authentication successful! Credentials saved.
+```
+
+Credentials are saved to `~/.config/musicplayer/lastfm.json`      
+
 # Commands and Controls
 
 ## Commands
@@ -55,6 +100,10 @@ go build -o musicplayer .
 ./musicplayer --add-to-playlist mylist /path/to/folder     # add folder
 ./musicplayer --add-to-playlist mylist /path/to/track.mp3  # add single file
 ./musicplayer --playlist mylist                            # open playlist
+
+# Last.fm
+
+./musicplayer --lastfm-auth
 ```
 
 ## Controls:
