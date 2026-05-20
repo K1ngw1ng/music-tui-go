@@ -18,6 +18,7 @@ func main() {
 	addFlag := flag.String("add-to-playlist", "", "Add tracks to a named playlist from paths")
 	outputFlag := flag.String("output", "", "Output .m3u path for --create-playlist (default: MusicDir/<name>.m3u)")
 	lastfmAuthFlag := flag.Bool("lastfm-auth", false, "Set up Last.fm API credentials and authenticate")
+	lastfmRmFlag := flag.Bool("lastfm-rm", false, "Remove saved Last.fm credentials")
 	flag.Parse()
 
 	cfg := loadConfig()
@@ -30,6 +31,20 @@ func main() {
 			fmt.Fprintf(os.Stderr, "last.fm auth error: %v\n", err)
 			os.Exit(1)
 		}
+		return
+	}
+
+	if *lastfmRmFlag {
+		path := lastfmConfigPath()
+		if err := os.Remove(path); err != nil {
+			if os.IsNotExist(err) {
+				fmt.Fprintln(os.Stderr, "no Last.fm credentials file found")
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "error removing credentials: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Last.fm credentials removed.")
 		return
 	}
 
