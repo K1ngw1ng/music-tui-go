@@ -79,7 +79,12 @@ On success:
 Last.fm authentication successful! Credentials saved.
 ```
 
-Credentials are saved to `~/.config/musicplayer/lastfm.json`      
+Credentials are saved to `~/.config/musicplayer/lastfm.json` 
+
+To the delete the credentals run:
+```
+musicplayer --lastfm-rm
+```
 
 # Commands and Controls
 
