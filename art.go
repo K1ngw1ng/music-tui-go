@@ -5,6 +5,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -70,7 +71,25 @@ func imageToHalfBlock(img image.Image, width, height int) string {
 	return sb.String()
 }
 
-func renderArt(trackPath string, maxW, maxH int) string {
+func fetchImageFromURL(artURL string) (image.Image, error) {
+	resp, err := http.Get(artURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	img, _, err := image.Decode(resp.Body)
+	return img, err
+}
+
+func renderArt(trackPath, artURL string, maxW, maxH int) string {
+	if artURL != "" {
+		img, err := fetchImageFromURL(artURL)
+		if err == nil {
+			return imageToHalfBlock(img, maxW, maxH)
+		}
+		return noArtPlaceholder(maxW, maxH)
+	}
+
 	artFile, err := extractArt(trackPath)
 	if err != nil {
 		return noArtPlaceholder(maxW, maxH)
