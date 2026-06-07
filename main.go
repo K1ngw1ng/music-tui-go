@@ -79,6 +79,22 @@ func main() {
 			fmt.Fprintln(os.Stderr, "no Navidrome credentials found — run with --navidrome-auth first")
 			os.Exit(1)
 		}
+
+		if *playlistFlag != "" {
+			fmt.Printf("Fetching playlist %q from Navidrome...\n", *playlistFlag)
+			tracks, err := client.FetchPlaylistTracks(*playlistFlag)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(1)
+			}
+			if len(tracks) == 0 {
+				fmt.Fprintf(os.Stderr, "playlist %q is empty\n", *playlistFlag)
+				os.Exit(1)
+			}
+			runTUI(tracks, cfg, *playlistFlag, loadLastFMClient())
+			return
+		}
+
 		fmt.Println("Fetching tracks from Navidrome...")
 		tracks, err := client.FetchAllTracks()
 		if err != nil {

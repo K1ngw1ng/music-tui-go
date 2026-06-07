@@ -194,7 +194,7 @@ func (c *NavidromeClient) fetchAlbumSongs(albumID string) (songs []subsonicSong,
 	var r struct {
 		Response struct {
 			Album struct {
-				CoverArt string         `json:"coverArt"`
+				CoverArt string        `json:"coverArt"`
 				Song     []subsonicSong `json:"song"`
 			} `json:"album"`
 		} `json:"subsonic-response"`
@@ -203,6 +203,25 @@ func (c *NavidromeClient) fetchAlbumSongs(albumID string) (songs []subsonicSong,
 		return nil, "", err
 	}
 	return r.Response.Album.Song, r.Response.Album.CoverArt, nil
+}
+
+func (c *NavidromeClient) songToTrack(song subsonicSong, fallbackCoverArt string) Track {
+	coverArt := song.CoverArt
+	if coverArt == "" {
+		coverArt = fallbackCoverArt
+	}
+	artURL := ""
+	if coverArt != "" {
+		artURL = c.coverArtURL(coverArt)
+	}
+	return Track{
+		Path:     c.streamURL(song.ID),
+		Title:    song.Title,
+		Artist:   song.Artist,
+		Album:    song.Album,
+		Duration: song.Duration,
+		ArtURL:   artURL,
+	}
 }
 
 // FetchAllTracks pages through all albums and returns a flat track list.
@@ -220,22 +239,7 @@ func (c *NavidromeClient) FetchAllTracks() ([]Track, error) {
 				continue
 			}
 			for _, song := range songs {
-				coverArt := song.CoverArt
-				if coverArt == "" {
-					coverArt = albumCoverArt
-				}
-				artURL := ""
-				if coverArt != "" {
-					artURL = c.coverArtURL(coverArt)
-				}
-				tracks = append(tracks, Track{
-					Path:     c.streamURL(song.ID),
-					Title:    song.Title,
-					Artist:   song.Artist,
-					Album:    song.Album,
-					Duration: song.Duration,
-					ArtURL:   artURL,
-				})
+				tracks = append(tracks, c.songToTrack(song, albumCoverArt))
 			}
 		}
 		if len(albums) < 500 {
@@ -243,6 +247,76 @@ func (c *NavidromeClient) FetchAllTracks() ([]Track, error) {
 		}
 	}
 	return tracks, nil
+}
+
+type subsonicPlaylistSummary struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (c *NavidromeClient) fetchPlaylists() ([]subsonicPlaylistSummary, error) {
+	body, err := c.apiGet("getPlaylists", nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkSubsonicStatus(body); err != nil {
+		return nil, err
+	}
+	var r struct {
+		Response struct {
+			Playlists struct {
+				Playlist []subsonicPlaylistSummary `json:"playlist"`
+			} `json:"playlists"`
+		} `json:"subsonic-response"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return nil, err
+	}
+	return r.Response.Playlists.Playlist, nil
+}
+
+func (c *NavidromeClient) fetchPlaylistSongs(id string) ([]subsonicSong, error) {
+	body, err := c.apiGet("getPlaylist", url.Values{"id": {id}})
+	if err != nil {
+		return nil, err
+	}
+	if err := checkSubsonicStatus(body); err != nil {
+		return nil, err
+	}
+	var r struct {
+		Response struct {
+			Playlist struct {
+				Entry []subsonicSong `json:"entry"`
+			} `json:"playlist"`
+		} `json:"subsonic-response"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return nil, err
+	}
+	return r.Response.Playlist.Entry, nil
+}
+
+// FetchPlaylistTracks finds a server-side playlist by name and returns its tracks.
+func (c *NavidromeClient) FetchPlaylistTracks(name string) ([]Track, error) {
+	playlists, err := c.fetchPlaylists()
+	if err != nil {
+		return nil, err
+	}
+	nameLower := strings.ToLower(name)
+	for _, pl := range playlists {
+		if strings.ToLower(pl.Name) == nameLower {
+			songs, err := c.fetchPlaylistSongs(pl.ID)
+			if err != nil {
+				return nil, err
+			}
+			tracks := make([]Track, len(songs))
+			for i, song := range songs {
+				tracks[i] = c.songToTrack(song, "")
+			}
+			return tracks, nil
+		}
+	}
+	return nil, fmt.Errorf("playlist %q not found on server", name)
 }
 
 func navidromeAuthFlow() error {
