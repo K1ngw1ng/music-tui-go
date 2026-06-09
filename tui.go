@@ -59,11 +59,11 @@ type model struct {
 	cfg     Config
 	lastfm  *LastFMClient
 
-	prompting    bool
-	promptInput  textinput.Model
-	promptTrack  int
-	promptErr    string
-	promptOk     string
+	prompting   bool
+	promptInput textinput.Model
+	promptTrack int
+	promptErr   string
+	promptOk    string
 }
 
 func newModel(tracks []Track, cfg Config, title string, lastfm *LastFMClient) model {
@@ -101,15 +101,15 @@ func (m model) Init() tea.Cmd {
 	if len(m.tracks) > 0 {
 		artW, artH := m.artDims()
 		if artW > 0 {
-			return loadArt(m.tracks[0].Path, artW, artH)
+			return loadArt(m.tracks[0], artW, artH)
 		}
 	}
 	return nil
 }
 
-func loadArt(path string, w, h int) tea.Cmd {
+func loadArt(track Track, w, h int) tea.Cmd {
 	return func() tea.Msg {
-		art := renderArt(path, w, h)
+		art := renderArt(track.Path, track.ArtURL, w, h)
 		return artReadyMsg{art: art}
 	}
 }
@@ -128,7 +128,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = true
 			idx := m.list.Index()
 			artW, artH := m.artDims()
-			return m, loadArt(m.tracks[idx].Path, artW, artH)
+			return m, loadArt(m.tracks[idx], artW, artH)
 		}
 		return m, nil
 
@@ -187,7 +187,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	newIdx := m.list.Index()
 	if newIdx != prevIdx && m.current == -1 {
 		artW, artH := m.artDims()
-		return m, tea.Batch(cmd, loadArt(m.tracks[newIdx].Path, artW, artH))
+		return m, tea.Batch(cmd, loadArt(m.tracks[newIdx], artW, artH))
 	}
 	return m, cmd
 }
@@ -257,7 +257,7 @@ func (m *model) playTrack(idx int) tea.Cmd {
 
 	artW, artH := m.artDims()
 	return tea.Batch(
-		loadArt(track.Path, artW, artH),
+		loadArt(track, artW, artH),
 		waitForDone(doneCh),
 	)
 }

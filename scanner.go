@@ -22,6 +22,7 @@ type Track struct {
 	Artist   string
 	Album    string
 	Duration int
+	ArtURL   string
 }
 
 func (t Track) DisplayTitle() string {

@@ -19,6 +19,9 @@ func main() {
 	outputFlag := flag.String("output", "", "Output .m3u path for --create-playlist (default: MusicDir/<name>.m3u)")
 	lastfmAuthFlag := flag.Bool("lastfm-auth", false, "Set up Last.fm API credentials and authenticate")
 	lastfmRmFlag := flag.Bool("lastfm-rm", false, "Remove saved Last.fm credentials")
+	navidromeFlag := flag.Bool("navidrome", false, "Stream from configured Navidrome server")
+	navidromeAuthFlag := flag.Bool("navidrome-auth", false, "Set up Navidrome server credentials")
+	navidromeRmFlag := flag.Bool("navidrome-rm", false, "Remove saved Navidrome credentials")
 	flag.Parse()
 
 	cfg := loadConfig()
@@ -45,6 +48,80 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("Last.fm credentials removed.")
+		return
+	}
+
+	if *navidromeAuthFlag {
+		if err := navidromeAuthFlow(); err != nil {
+			fmt.Fprintf(os.Stderr, "navidrome auth error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *navidromeRmFlag {
+		path := navidromeConfigPath()
+		if err := os.Remove(path); err != nil {
+			if os.IsNotExist(err) {
+				fmt.Fprintln(os.Stderr, "no Navidrome credentials file found")
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "error removing credentials: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Navidrome credentials removed.")
+		return
+	}
+
+	if *navidromeFlag {
+		client := loadNavidromeClient()
+		if client == nil {
+			fmt.Fprintln(os.Stderr, "no Navidrome credentials found — run with --navidrome-auth first")
+			os.Exit(1)
+		}
+
+		if *playlistFlag != "" {
+			fmt.Printf("Fetching playlist %q from Navidrome...\n", *playlistFlag)
+			tracks, err := client.FetchPlaylistTracks(*playlistFlag)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(1)
+			}
+			if len(tracks) == 0 {
+				fmt.Fprintf(os.Stderr, "playlist %q is empty\n", *playlistFlag)
+				os.Exit(1)
+			}
+			runTUI(tracks, cfg, *playlistFlag, loadLastFMClient())
+			return
+		}
+
+		fmt.Println("Fetching tracks from Navidrome...")
+		tracks, err := client.FetchAllTracks()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error fetching tracks: %v\n", err)
+			os.Exit(1)
+		}
+		if len(tracks) == 0 {
+			fmt.Fprintln(os.Stderr, "no tracks found on Navidrome server")
+			os.Exit(1)
+		}
+		title := "Navidrome"
+		if *albumFlag != "" {
+			tracks = filterByAlbum(tracks, *albumFlag)
+			title = "Album: " + *albumFlag
+			if len(tracks) == 0 {
+				fmt.Fprintf(os.Stderr, "No tracks found for album %q\n", *albumFlag)
+				os.Exit(1)
+			}
+		} else if *artistFlag != "" {
+			tracks = filterByArtist(tracks, *artistFlag)
+			title = "Artist: " + *artistFlag
+			if len(tracks) == 0 {
+				fmt.Fprintf(os.Stderr, "No tracks found for artist %q\n", *artistFlag)
+				os.Exit(1)
+			}
+		}
+		runTUI(tracks, cfg, title, loadLastFMClient())
 		return
 	}
 
