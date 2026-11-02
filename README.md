@@ -86,6 +86,17 @@ To the delete the credentals run:
 musicplayer --lastfm-rm
 ```
 
+## Libre.fm Instructions
+
+Libre.fm uses the same API as Last.fm but needs no API key or secret. Run the auth command, open the printed URL, approve access, and press Enter:
+
+```sh
+musicplayer --librefm-auth
+musicplayer --librefm-rm
+```
+
+Credentials are saved to `~/.config/musicplayer/librefm.json`. If both Last.fm and Libre.fm are set up, every play is sent to both.
+
 # Commands and Controls
 
 ## Commands
@@ -109,6 +120,7 @@ musicplayer --lastfm-rm
 # Last.fm
 
 ./musicplayer --lastfm-auth
+./musicplayer --librefm-auth
 ```
 
 ## Controls:
@@ -137,4 +149,3 @@ musicplayer --lastfm-rm
 <p float="left">
   <img src="https://github.com/user-attachments/assets/a0530e66-29d7-4791-87f0-a59653fb6a58" width="500" />
 </p>
-

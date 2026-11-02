@@ -19,6 +19,8 @@ func main() {
 	outputFlag := flag.String("output", "", "Output .m3u path for --create-playlist (default: MusicDir/<name>.m3u)")
 	lastfmAuthFlag := flag.Bool("lastfm-auth", false, "Set up Last.fm API credentials and authenticate")
 	lastfmRmFlag := flag.Bool("lastfm-rm", false, "Remove saved Last.fm credentials")
+	librefmAuthFlag := flag.Bool("librefm-auth", false, "Set up Libre.fm API credentials and authenticate")
+	librefmRmFlag := flag.Bool("librefm-rm", false, "Remove saved Libre.fm credentials")
 	navidromeFlag := flag.Bool("navidrome", false, "Stream from configured Navidrome server")
 	navidromeAuthFlag := flag.Bool("navidrome-auth", false, "Set up Navidrome server credentials")
 	navidromeRmFlag := flag.Bool("navidrome-rm", false, "Remove saved Navidrome credentials")
@@ -29,26 +31,32 @@ func main() {
 		cfg.Playlists = map[string]string{}
 	}
 
-	if *lastfmAuthFlag {
-		if err := lastfmAuthFlow(); err != nil {
-			fmt.Fprintf(os.Stderr, "last.fm auth error: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	if *lastfmRmFlag {
-		path := lastfmConfigPath()
-		if err := os.Remove(path); err != nil {
-			if os.IsNotExist(err) {
-				fmt.Fprintln(os.Stderr, "no Last.fm credentials file found")
+	for _, f := range []struct {
+		auth, rm *bool
+		svc      scrobbleService
+	}{
+		{lastfmAuthFlag, lastfmRmFlag, lastfmService},
+		{librefmAuthFlag, librefmRmFlag, librefmService},
+	} {
+		if *f.auth {
+			if err := lastfmAuthFlow(f.svc); err != nil {
+				fmt.Fprintf(os.Stderr, "%s auth error: %v\n", f.svc.name, err)
 				os.Exit(1)
 			}
-			fmt.Fprintf(os.Stderr, "error removing credentials: %v\n", err)
-			os.Exit(1)
+			return
 		}
-		fmt.Println("Last.fm credentials removed.")
-		return
+		if *f.rm {
+			if err := os.Remove(lastfmConfigPath(f.svc)); err != nil {
+				if os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "no %s credentials file found\n", f.svc.name)
+					os.Exit(1)
+				}
+				fmt.Fprintf(os.Stderr, "error removing credentials: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("%s credentials removed.\n", f.svc.name)
+			return
+		}
 	}
 
 	if *navidromeAuthFlag {
